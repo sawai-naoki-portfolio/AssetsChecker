@@ -1,0 +1,50 @@
+@startuml seq-backup
+!include _style.iuml
+title シーケンス図③ 暗号化バックアップの書き出しと復元
+autonumber "<b>[0]"
+
+actor 利用者 as U
+participant "BackupPage" as BP
+participant "BackupService" as BS
+participant "Isolate\n(別スレッド)" as ISO
+participant "AssetRepository" as Repo
+participant "共有シート /\nファイル選択" as OS
+
+== 書き出し ==
+U -> BP : 「バックアップを書き出す」
+BP --> U : パスワード入力（確認つき）
+U -> BP : パスワード
+BP -> BS : createBackup(password)
+BS -> Repo : exportAll()
+Repo --> BS : 5 テーブルのダンプ
+BS -> BS : JSON 化 → gzip
+BS -> ISO : Isolate.run(PBKDF2-HMAC-SHA256\n210,000 回, salt 16B)
+ISO --> BS : 256bit 鍵
+BS -> BS : AES-256-GCM(IV 12B) で暗号化\n→ JSON 封筒（平文を含まない）
+BS --> BP : .pacbk バイト列
+BP -> OS : 一時ファイルを共有（iCloud Drive / Google Drive 等）
+BP -> Repo : setSetting(last_backup_at)
+BP -> BP : 一時ファイルを削除
+BP --> U : 「バックアップを書き出しました」
+
+== 復元 ==
+U -> BP : 「ファイルを選んで復元」
+BP -> OS : FilePicker.pickFiles()
+OS --> BP : バイト列
+BP --> U : パスワード入力
+U -> BP : パスワード
+BP -> BS : decodeBackup(bytes, password)
+BS -> ISO : 鍵導出
+BS -> BS : GCM 復号（改ざん検知）→ gunzip → JSON
+alt 形式違い / パスワード違い / 破損
+  BS --> BP : BackupException（日本語メッセージ）
+  BP --> U : スナックバーで通知
+else 成功
+  BS --> BP : BackupSummary + data
+  BP --> U : 確認「作成日時・口座数・記録数／全置換されます」
+  U -> BP : 復元する
+  BP -> BS : applyRestore(data)
+  BS -> Repo : importAll(data)\n1 トランザクションで全削除→全挿入
+  BP --> U : 「バックアップを復元しました」
+end
+@enduml

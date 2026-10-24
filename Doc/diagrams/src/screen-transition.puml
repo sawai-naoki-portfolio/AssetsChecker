@@ -1,0 +1,63 @@
+@startuml screen-transition
+!include _style.iuml
+title 画面遷移図 — Privacy Asset Checker
+hide empty description
+
+state "S00 スプラッシュ\n（DB 起動ゲート）" as S00
+state "S01 起動エラー" as S01
+state "S02 ロック画面" as S02
+
+state "HomeShell（下部ナビ 4 タブ）" as Shell {
+  state "S10 資産配分" as S10
+  state "S20 資産推移" as S20
+  state "S30 記録一覧" as S30
+  state "S40 設定" as S40
+  S10 -[hidden]right-> S20
+  S20 -[hidden]right-> S30
+  S30 -[hidden]right-> S40
+}
+note top of Shell : 4 タブは IndexedStack で状態を保持したまま切り替え
+
+state "S31 資産を記録\n（初回 2 択 / 編集）" as S31
+state "S32 CSV 取り込み" as S32
+state "S41 バックアップ" as S41
+state "S42 端末の引き継ぎ" as S42
+state "S43 この端末から送る" as S43
+state "S44 この端末で受け取る" as S44
+state "S45 口座管理" as S45
+state "S46 口座の追加・編集" as S46
+state "S47 カテゴリ管理" as S47
+state "S50 Pro について\n（Paywall）" as S50
+
+[*] --> S00
+S00 --> S01 : 復号失敗
+S01 --> S00 : もう一度試す
+S00 --> S02 : 起動時ロック ON
+S00 --> Shell : ロック OFF
+S02 --> Shell : 認証成功
+Shell -up-> S02 : 20 秒超の\nバックグラウンド復帰
+
+S10 --> S31 : 空状態「資産を記録する」
+S30 --> S31 : 「今月を記録」/ 行タップ
+S30 --> S32 : CSV アイコン
+S31 --> S46 : 初回「口座を追加する」
+S31 --> S50 : 入金額カード（Free）
+S20 --> S50 : 全期間バナー（Free）
+
+S40 --> S41 : 暗号化バックアップ / 督促バナー
+S40 --> S42 : 端末の引き継ぎ
+S40 --> S45 : 口座管理
+S40 --> S47 : カテゴリ管理
+S40 --> S50 : Pro カード / 目標額（Free）
+S42 --> S43 : 古い端末
+S42 --> S44 : 新しい端末
+S45 --> S46 : 追加 / 行タップ
+S45 --> S50 : 4 口座目（Free）
+S46 --> S50 : 上限到達ダイアログ
+
+legend bottom
+  モーダル（画面遷移ではなく同一画面上）：
+  ・S31 項目追加ボトムシート ・日付ピッカー ・S40 リマインダー日時シート / 目標額ダイアログ
+  ・S41 パスワード入力ダイアログ ・S44 引き継ぎコード入力 ・各種削除確認ダイアログ
+endlegend
+@enduml

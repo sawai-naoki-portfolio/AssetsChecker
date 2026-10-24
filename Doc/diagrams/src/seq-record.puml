@@ -1,0 +1,43 @@
+@startuml seq-record
+!include _style.iuml
+title シーケンス図② 資産の記録 — 前回を 1 タップ複製して保存
+autonumber "<b>[0]"
+
+actor 利用者 as U
+participant "RecordsPage" as RP
+participant "SnapshotEditorPage" as ED
+participant "AssetRepository" as Repo
+database "SQLCipher DB" as DB
+participant "dbRevisionProvider" as Rev
+participant "読み取り Provider 群\n(currentSnapshot / trend ...)" as Readers
+
+U -> RP : 「今月を記録」
+RP -> ED : push(SnapshotEditorPage)
+ED -> Repo : latestSnapshotBefore(今日)
+Repo -> DB : SELECT ... recorded_on < ?
+DB --> Repo : 前回の明細
+Repo --> ED : AssetSnapshot
+ED --> U : 「前回のデータを 1 タップで複製」カード
+U -> ED : 複製をタップ
+ED -> ED : _duplicatePrevious()\n明細を HoldingDraft(source: duplicated) に変換
+U -> ED : 変わった金額だけ修正\n（Pro なら入金額も入力）
+U -> ED : 保存
+ED -> Repo : saveSnapshot(date, drafts, contribution)
+activate Repo
+Repo -> DB : BEGIN TRANSACTION
+Repo -> DB : DELETE asset_records WHERE recorded_on = ?
+loop 金額 ≠ 0 の明細
+  Repo -> DB : INSERT asset_records
+end
+alt contribution > 0
+  Repo -> DB : INSERT OR REPLACE snapshot_meta
+else
+  Repo -> DB : DELETE snapshot_meta
+end
+Repo -> DB : COMMIT
+deactivate Repo
+ED -> Rev : invalidateDataFrom(ref)\nstate++
+Rev --> Readers : 依存先が変わったので再実行
+Readers -> Repo : 再読込
+ED --> U : pop() → 一覧・グラフが最新化
+@enduml

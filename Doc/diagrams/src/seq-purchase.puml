@@ -1,0 +1,44 @@
+@startuml seq-purchase
+!include _style.iuml
+title シーケンス図⑤ Pro の購入（買い切り）と取りこぼし防止
+autonumber "<b>[0]"
+
+actor 利用者 as U
+participant "PaywallPage" as PW
+participant "PurchaseController" as PC
+participant "InAppPurchase\n(Store SDK)" as IAP
+participant "ProStatus" as PS
+participant "DbKeyStore" as KS
+database "Keychain /\nKeystore" as KC
+
+== アプリ起動時 ==
+PC -> IAP : isAvailable()
+PC -> IAP : purchaseStream.listen(_handleUpdates)
+PC -> IAP : queryProductDetails({pro_lifetime})
+opt Android のみ
+  PC -> IAP : restorePurchases()
+  note right
+    決済直後にアプリが落ちて acknowledge できなかった購入を拾う。
+    拾わないと Google が 3 日後に自動返金する。
+    iOS で無条件に呼ぶとサインインを求められるため Android 限定。
+  end note
+end
+
+== 購入 ==
+U -> PW : 「購入する」
+PW -> PC : buy()
+PC -> IAP : buyNonConsumable(product)
+IAP --> U : ストアの決済シート
+U -> IAP : 承認
+IAP -> PC : purchaseStream: purchased
+PC -> PS : unlock()
+PS -> KS : setProUnlocked(true)
+KS -> KC : write
+note right of KC
+  Pro 状態は DB ではなく Keychain / Keystore に保存。
+  他人のバックアップを復元しても Pro は持ち込まれない。
+end note
+PC -> IAP : completePurchase()
+PS --> PW : isPro = true
+PW --> U : Pro 機能が解放（全期間グラフ・口座無制限 ...）
+@enduml

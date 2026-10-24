@@ -1,0 +1,63 @@
+@startuml er
+!include _style.iuml
+title ER 図 — SQLCipher 暗号化 DB（スキーマ v2）
+skinparam linetype ortho
+hide circle
+
+entity "categories\nカテゴリ" as categories {
+  * id : INTEGER <<PK>>
+  --
+  * name : TEXT <<UNIQUE>>
+  * color : INTEGER
+  * sort_order : INTEGER = 0
+}
+
+entity "accounts\n口座" as accounts {
+  * id : INTEGER <<PK>>
+  --
+  * name : TEXT
+  * account_type : TEXT
+  * note : TEXT = ''
+  * sort_order : INTEGER = 0
+  * archived : INTEGER = 0  ※未使用
+  ..
+  UNIQUE(name, account_type)
+}
+
+entity "asset_records\n資産記録" as records {
+  * id : INTEGER <<PK>>
+  --
+  * account_id : INTEGER <<FK>> ON DELETE CASCADE
+  * category_id : INTEGER <<FK>> ON DELETE RESTRICT
+  * recorded_on : TEXT (YYYY-MM-DD)
+  * amount : INTEGER（円）
+  * memo : TEXT = ''  ※未使用
+  * source : TEXT = 'manual'
+  ..
+  UNIQUE(recorded_on, account_id, category_id)
+  INDEX(recorded_on)
+}
+
+entity "snapshot_meta\n記録日の付随情報（v2）" as meta {
+  * recorded_on : TEXT <<PK>>
+  --
+  * contribution : INTEGER = 0（入金額）
+}
+
+entity "app_settings\n設定（KVS）" as settings {
+  * key : TEXT <<PK>>
+  --
+  * value : TEXT
+}
+
+accounts ||--o{ records
+categories ||--o{ records
+meta |o..o{ records : recorded_on で対応\n（FK なし）
+
+note right of settings
+  主なキー：biometric_lock / block_screenshot /
+  reminder_enabled / reminder_day / reminder_hour /
+  goal_amount / last_backup_at
+  ※ Pro 状態と DB 鍵は DB ではなく Keychain / Keystore
+end note
+@enduml

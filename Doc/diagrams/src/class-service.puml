@@ -1,0 +1,149 @@
+@startuml class-service
+!include _style.iuml
+title クラス図（2/2）データアクセス・サービス層
+
+package "data/db" {
+  class AppDatabase {
+    + {static} fileName : String
+    + {static} schemaVersion = 2
+    - _keyStore : DbKeyStore
+    - _db : Database?
+    --
+    + open() : Future<Database>
+    + close() : Future<void>
+    - {static} _createSchema(db)
+    - {static} _createSnapshotMeta(db)
+    - {static} _seedCategories(db)
+  }
+  class DbKeyStore {
+    - _storage : FlutterSecureStorage
+    --
+    + obtainDatabaseKey() : Future<String>
+    + hasDatabaseKey() : Future<bool>
+    + isProUnlocked() : Future<bool>
+    + setProUnlocked(bool)
+    + destroyDatabaseKey()
+    - {static} _generateKey() : String  // 256bit 乱数
+  }
+}
+
+package "data/repositories" {
+  class AssetRepository {
+    - _db : Database
+    --
+    + listCategories() / upsertCategory() / deleteCategory()
+    + listAccounts() / upsertAccount() / deleteAccount()
+    + listSnapshotDates() : Future<List<DateTime>>
+    + loadSnapshot(date) : Future<AssetSnapshot?>
+    + latestSnapshot() / latestSnapshotBefore(date)
+    + saveSnapshot(date, drafts, contribution)
+    + deleteSnapshot(date)
+    + trend() : Future<List<TrendPoint>>
+    + loadSettings() / setSetting(key, value)
+    + exportAll() : Map<String, List<Map>>
+    + importAll(data)  // 1 トランザクションで全置換
+    + deleteEverything()
+  }
+  class HoldingDraft {
+    + accountId : int
+    + categoryId : int
+    + amount : int
+    + source : RecordSource
+  }
+}
+
+package "data/backup" {
+  class BackupService {
+    + {static} kdfIterations = 210000
+    + {static} fileExtension = "pacbk"
+    --
+    + createBackup(password) : Future<Uint8List>
+    + decodeBackup(bytes, password)
+    + applyRestore(data)
+    + {static} buildEnvelope(tables, password)
+    + {static} readEnvelope(bytes, password)
+  }
+  class BackupException
+}
+
+package "data/csv" {
+  class CsvTextDecoder {
+    + decode(bytes) : Future<DecodedCsv>
+  }
+  class BrokerageCsvParser {
+    + parse(text) : CsvParseResult
+    + {static} parseAmount(raw) : int?
+    + {static} guessCategory(text) : String?
+    - {static} _headerScore(cell, candidates)
+  }
+  class CsvParseResult {
+    + format : String
+    + holdings : List<ParsedHolding>
+    + warnings : List<String>
+  }
+}
+
+package "data/transfer" {
+  class LanHandshake {
+    + token : String
+    + hosts : List<String>
+    + port : int
+    + encode() : String  // PACL1|token|hosts|port
+    + {static} parse(raw) : LanHandshake?
+  }
+  class LanTransferServer {
+    + {static} idleTimeout = 5min
+    + handshake : LanHandshake
+    + onDelivered : Stream<void>
+    + {static} start(payload) : Future<LanTransferServer>
+    + stop()
+  }
+  class LanTransferClient {
+    + {static} fetch(handshake) : Future<Uint8List>
+  }
+  class QrTransferCodec {
+    + {static} encode(payload, sessionId) : List<String>
+    + {static} parseFrame(raw) : QrTransferFrame?
+    + {static} newTransferCode() : String
+  }
+  class QrTransferAssembler {
+    + add(raw) : bool
+    + reset()
+    + build() : Uint8List
+  }
+}
+
+package "security / notifications / purchase" {
+  class BiometricService {
+    + isAvailable() : Future<bool>
+    + authenticate() : Future<BiometricOutcome>
+  }
+  class ScreenGuard {
+    + {static} enable(blockScreenshot)
+    + {static} setBlockScreenshot(bool)
+  }
+  class ReminderService {
+    + initialize()
+    + requestPermission() : Future<bool>
+    + schedule(day, hour)
+    + cancel()
+  }
+  class PurchaseController <<Notifier>> {
+    + buy()
+    + restore()
+    - _handleUpdates(purchases)
+    - _restoreInterruptedPurchase()
+  }
+}
+
+AppDatabase --> DbKeyStore : 鍵を取得
+AssetRepository --> AppDatabase : Database
+AssetRepository ..> HoldingDraft
+BackupService --> AssetRepository : exportAll / importAll
+BackupService ..> BackupException
+BrokerageCsvParser ..> CsvParseResult
+LanTransferServer *-- LanHandshake
+LanTransferClient ..> LanHandshake
+QrTransferCodec ..> QrTransferAssembler
+PurchaseController ..> DbKeyStore : Pro 状態を保存
+@enduml

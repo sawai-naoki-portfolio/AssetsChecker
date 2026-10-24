@@ -1,0 +1,64 @@
+@startuml usecase
+!include _style.iuml
+title ユースケース図 — Privacy Asset Checker
+left to right direction
+
+actor "利用者\n（個人投資家）" as User
+actor "OS\n(Keychain / Keystore\n生体認証 / 通知)" as OS
+actor "App Store /\nGoogle Play" as Store
+actor "もう 1 台の\n自分の端末" as Device2
+
+rectangle "Privacy Asset Checker（端末内で完結）" {
+  package "記録" {
+    usecase "資産を記録する\n（口座 × カテゴリ × 日付）" as UC1
+    usecase "前回の記録を\n1 タップ複製" as UC2
+    usecase "総額だけで始める" as UC3
+    usecase "証券会社 CSV を\n端末内で解析・取り込み" as UC4
+    usecase "入金額を記録する【Pro】" as UC5
+  }
+  package "閲覧" {
+    usecase "資産配分を見る\n（構成比・口座別）" as UC6
+    usecase "資産推移を見る\n（Free: 直近 3 ヶ月）" as UC7
+    usecase "元本ラインと運用損益を\n見る【Pro】" as UC8
+    usecase "目標額と達成率を追う【Pro】" as UC9
+  }
+  package "管理" {
+    usecase "口座を管理する\n（Free: 3 口座まで）" as UC10
+    usecase "カテゴリを管理する" as UC11
+  }
+  package "データを守る（すべて無料）" {
+    usecase "暗号化バックアップを\n書き出す / 復元する" as UC12
+    usecase "生体認証でロックする" as UC13
+    usecase "毎月の入力リマインダー" as UC14
+    usecase "端末を引き継ぐ\n（LAN / 分割 QR）" as UC15
+  }
+  usecase "Pro を購入 / 復元する" as UC16
+}
+
+User --> UC1
+User --> UC3
+User --> UC4
+User --> UC6
+User --> UC7
+User --> UC10
+User --> UC11
+User --> UC12
+User --> UC13
+User --> UC14
+User --> UC15
+User --> UC16
+UC2 .> UC1 : <<extend>>
+UC5 .> UC1 : <<extend>>
+UC8 .> UC7 : <<extend>>
+UC9 .> UC6 : <<extend>>
+
+UC13 --> OS
+UC14 --> OS
+UC16 --> Store
+UC15 --> Device2
+
+legend bottom
+  アプリが通信するのは ① ストア課金 ② LAN 引き継ぎ の 2 つだけ。
+  アプリ専用のサーバーは存在しない。【Pro】は買い切り 1,200 円の有料機能。
+endlegend
+@enduml

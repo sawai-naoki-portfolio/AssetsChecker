@@ -1,0 +1,60 @@
+@startuml architecture
+!include _style.iuml
+title システム構成図 — 端末内完結アーキテクチャ
+
+node "スマートフォン（iOS / Android）" as Phone {
+  package "Flutter アプリ（Dart）" {
+    package "Presentation\nlib/src/features/*" as UI {
+      component "HomeShell\n（4 タブ）" as Shell
+      component "各画面\nConsumerWidget" as Pages
+      component "AppLockGate" as Lock
+    }
+    package "State\nlib/src/providers.dart" as State {
+      component "Riverpod Providers\n+ dbRevisionProvider" as Prov
+    }
+    package "Domain / Data\nlib/src/data" as Data {
+      component "AssetRepository\n（SQL はここだけ）" as Repo
+      component "BackupService\n(PBKDF2 → gzip → AES-GCM)" as Backup
+      component "BrokerageCsvParser\nCsvTextDecoder" as Csv
+      component "LanTransfer\nQrTransferCodec" as Transfer
+    }
+    package "Platform Services" as Svc {
+      component "BiometricService" as Bio
+      component "ReminderService" as Rem
+      component "ScreenGuard\n(MethodChannel)" as Guard
+      component "PurchaseController" as Purchase
+    }
+  }
+  database "SQLCipher DB\nAES-256 暗号化" as DB
+  component "Keychain / Keystore\n(flutter_secure_storage)" as KS
+  component "ネイティブ実装\nMainActivity.kt / AppDelegate.swift\nFLAG_SECURE・ブラー" as Native
+  component "ローカル通知" as Notif
+}
+
+cloud "App Store / Google Play" as Store
+node "新しい端末\n（同じ Wi-Fi）" as Phone2
+
+Shell --> Pages
+Lock --> Shell
+Pages --> Prov
+Prov --> Repo
+Pages --> Backup
+Pages --> Csv
+Pages --> Transfer
+Repo --> DB : sqflite_sqlcipher
+Prov ..> KS : DB 鍵 / Pro 状態
+Lock --> Bio
+Bio --> KS
+Rem --> Notif
+Guard --> Native
+Purchase --> Store : 購入・復元時のみ
+Transfer --> Phone2 : HTTP (LAN 内のみ)\nまたは分割 QR
+
+legend right
+  |= 原則 |= 実装 |
+  | 通信しない | HTTP クライアント・解析 SDK・広告 SDK を持たない |
+  | 保存は暗号化 | DB 全体を SQLCipher で AES-256 暗号化 |
+  | 鍵は OS の金庫へ | 256bit 乱数鍵を Keychain / Keystore に保管 |
+  | 課金状態も金庫へ | バックアップ復元で Pro が持ち込まれない |
+endlegend
+@enduml

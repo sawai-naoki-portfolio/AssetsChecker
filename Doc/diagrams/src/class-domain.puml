@@ -1,0 +1,138 @@
+@startuml class-domain
+!include _style.iuml
+title クラス図（1/2）ドメインモデル — lib/src/data/models
+
+class Account <<immutable>> {
+  + id : int?
+  + name : String
+  + type : AccountType
+  + note : String
+  + sortOrder : int
+  --
+  + copyWith(...) : Account
+  + toRow() : Map
+  + {static} fromRow(Map) : Account
+}
+
+enum AccountType {
+  specific（特定口座）
+  general（一般口座）
+  nisaGrowth（NISA 成長投資枠）
+  nisaTsumitate（NISA つみたて）
+  ideco（iDeCo）
+  bank（銀行口座）
+  crypto（暗号資産取引所）
+  other（その他）
+  --
+  + label : String
+  + {static} fromId(String?) : AccountType
+}
+
+class AssetCategory <<immutable>> {
+  + id : int?
+  + name : String
+  + color : Color
+  + sortOrder : int
+  --
+  + toRow() / fromRow()
+}
+
+class AssetRecord <<immutable>> {
+  + id : int?
+  + accountId : int
+  + categoryId : int
+  + recordedOn : DateTime
+  + amount : int  // 円
+  + source : RecordSource
+  --
+  + toRow() / fromRow()
+}
+
+enum RecordSource {
+  manual（手入力）
+  duplicated（複製）
+  csv（CSV）
+}
+
+class Holding <<immutable>> {
+  + record : AssetRecord
+  + account : Account
+  + category : AssetCategory
+  + amount : int
+}
+
+class AssetSnapshot <<immutable>> {
+  + date : DateTime
+  + holdings : List<Holding>
+  + contribution : int  // 入金額
+  --
+  + total : int
+  + isEmpty : bool
+  + byCategory() : List<CategorySlice>
+  + byAccount() : List<AccountSlice>
+}
+
+class CategorySlice {
+  + category : AssetCategory
+  + amount : int
+}
+class AccountSlice {
+  + account : Account
+  + amount : int
+  + holdings : List<Holding>
+}
+
+class TrendPoint <<immutable>> {
+  + period : DateTime
+  + total : int
+  + byCategory : Map<int, int>
+  + contribution : int
+  + principal : int  // 元本
+}
+
+class AppSettings <<immutable>> {
+  + biometricLock : bool
+  + blockScreenshot : bool
+  + reminderEnabled : bool
+  + reminderDay : int  // 1〜28 に丸める
+  + reminderHour : int
+  + goalAmount : int
+  + lastBackupAt : DateTime?
+  --
+  + {static} fromMap(Map<String,String>) : AppSettings
+}
+
+enum BackupStatus {
+  notNeeded
+  never
+  stale
+  ok
+}
+
+class "トップレベル関数（純粋ロジック）" as Pure <<utility>> {
+  + attachPrincipal(List<TrendPoint>) : List<TrendPoint>
+  + hasContributionData(List<TrendPoint>) : bool
+  + evaluateBackupStatus(lastBackupAt, hasRecords) : BackupStatus
+  + applyFreeTrendLimit(points, isPro) : List<TrendPoint>
+}
+
+Account --> AccountType
+AssetRecord --> RecordSource
+AssetRecord "*" ..> "1" Account : accountId
+AssetRecord "*" ..> "1" AssetCategory : categoryId
+Holding *-- AssetRecord
+Holding o-- Account
+Holding o-- AssetCategory
+AssetSnapshot "1" *-- "*" Holding
+AssetSnapshot ..> CategorySlice : 生成
+AssetSnapshot ..> AccountSlice : 生成
+AccountSlice o-- "*" Holding
+Pure ..> TrendPoint
+Pure ..> BackupStatus
+AppSettings ..> BackupStatus
+
+note bottom of Pure
+  Flutter / プラグインに依存しない純粋関数として切り出し、
+  端末なしで単体テストできるようにしている（test/ 配下 81 ケース）。
+end note
+@enduml

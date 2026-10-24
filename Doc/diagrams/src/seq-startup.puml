@@ -1,0 +1,61 @@
+@startuml seq-startup
+!include _style.iuml
+title シーケンス図① 起動 — 暗号化 DB を開いてロック解除まで
+autonumber "<b>[0]"
+
+actor 利用者 as U
+participant "main()" as Main
+participant "ScreenGuard" as SG
+participant "_BootstrapGate" as Gate
+participant "repositoryProvider" as RP
+participant "AppDatabase" as ADB
+participant "DbKeyStore" as KS
+database "Keychain /\nKeystore" as KC
+database "SQLCipher DB" as DB
+participant "AppLockGate" as Lock
+participant "BiometricService" as Bio
+
+U -> Main : アプリ起動
+Main -> SG : enable()
+SG -> SG : MethodChannel\n（FLAG_SECURE / ブラー）
+Main -> Gate : runApp(ProviderScope)
+Gate -> RP : watch()
+Gate --> U : スプラッシュ\n「暗号化データベースを開いています…」
+RP -> ADB : open()
+ADB -> KS : obtainDatabaseKey()
+KS -> KC : read("db_key")
+alt 初回起動（鍵なし）
+  KS -> KS : _generateKey()\n256bit 乱数
+  KS -> KC : write（first_unlock_this_device）
+end
+KC --> KS : 鍵
+KS --> ADB : 鍵
+ADB -> DB : openDatabase(password: 鍵)
+alt 初回
+  ADB -> DB : _createSchema + _seedCategories
+else v1 からの更新
+  ADB -> DB : onUpgrade: CREATE TABLE IF NOT EXISTS snapshot_meta
+end
+DB --> ADB : Database
+ADB --> RP : AssetRepository
+alt 復号失敗
+  RP --> Gate : AsyncError
+  Gate --> U : エラー画面「もう一度試す」
+else 成功
+  RP --> Gate : AsyncData
+  Gate -> Lock : AppLockGate(child: HomeShell)
+  Lock -> Lock : 設定を読み、遮蔽・リマインダーを再適用
+  opt 起動時ロックが ON
+    Lock -> Bio : authenticate()
+    Bio --> U : 生体認証 / パスコード
+    U -> Bio : 認証
+    Bio --> Lock : success
+  end
+  Lock --> U : ホーム（資産配分タブ）
+end
+
+note over Lock
+  バックグラウンド滞在が 20 秒を超えると
+  resumed 時に再ロックする
+end note
+@enduml

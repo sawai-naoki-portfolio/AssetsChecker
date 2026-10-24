@@ -1,0 +1,58 @@
+@startuml seq-transfer
+!include _style.iuml
+title シーケンス図④ 端末の引き継ぎ（LAN 直接転送 / 分割 QR フォールバック）
+autonumber "<b>[0]"
+
+actor "利用者" as U
+box "旧端末" #FAFBFC
+participant "TransferSendPage" as Send
+participant "BackupService" as BS
+participant "LanTransferServer" as Srv
+end box
+box "新端末" #FAFBFC
+participant "TransferReceivePage" as Recv
+participant "LanTransferClient" as Cli
+participant "QrTransferAssembler" as Asm
+participant "BackupService" as BS2
+end box
+
+U -> Send : 「この端末から送る」
+Send -> Send : 引き継ぎコード生成（8 桁・31 種）
+Send -> BS : createBackup(引き継ぎコード)
+BS --> Send : 暗号化封筒（.pacbk と同形式）
+Send -> Srv : start(envelope)\nHttpServer.bind(anyIPv4, 0)
+Srv --> Send : LanHandshake(token, hosts[], port)
+Send --> U : QR「PACL1|token|hosts|port」\n＋ 引き継ぎコードを文字で表示
+
+U -> Recv : 「この端末で受け取る」→ カメラで QR を読む
+alt QR が LAN 待ち合わせ情報
+  Recv -> Cli : fetch(handshake)
+  loop 候補アドレスを優先順に（192.168 → 10. → 172.16-31）
+    Cli -> Srv : GET http://host:port/token（4 秒で見限る）
+    alt token 一致
+      Srv --> Cli : 200 暗号化バイト列
+    else 不一致
+      Srv --> Cli : 404（存在自体を伏せる）
+    end
+  end
+  Cli --> Recv : payload
+else AP アイソレーション等で LAN 不可
+  U -> Send : 「QR だけで送る」に切替
+  Send --> U : 分割 QR を 220ms ごとに切替表示\nPACQ1|session|index|total|chunk
+  loop 全フレームが揃うまで（順不同・重複可）
+    Recv -> Asm : add(raw)
+  end
+  Asm --> Recv : build() → payload
+end
+
+Recv --> U : 引き継ぎコード入力ダイアログ
+U -> Recv : 旧端末に表示されたコード
+Recv -> BS2 : decodeBackup(payload, code)
+BS2 --> Recv : summary + data
+Recv --> U : 確認「すべて置き換えられます」
+U -> Recv : 取り込む
+Recv -> BS2 : applyRestore(data)
+Recv --> U : 「引き継ぎが完了しました」
+
+note over Srv : 5 分間やり取りがなければ\n自動で待ち受けを停止
+@enduml
