@@ -1,6 +1,6 @@
 # Privacy Asset Checker（プライバシー資産チェッカー）
 
-> 澤井直輝のポートフォリオ作品のひとつです（[作品一覧へ](https://github.com/sawai-naoki-portfolio/Portfolio)）。
+> 澤井直輝のポートフォリオ作品のひとつです（[作品一覧へ](https://github.com/sawai-naoki-portfolio)）。
 
 通信を一切行わない、端末内完結の資産管理アプリ（Flutter / iOS・Android）。
 
