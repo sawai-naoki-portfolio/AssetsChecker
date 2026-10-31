@@ -1,5 +1,7 @@
 # Privacy Asset Checker（プライバシー資産チェッカー）
 
+[![test](https://github.com/sawai-naoki-portfolio/AssetsChecker/actions/workflows/test.yml/badge.svg)](https://github.com/sawai-naoki-portfolio/AssetsChecker/actions/workflows/test.yml)
+
 > **ポートフォリオ作品**（[作品一覧へ](https://github.com/sawai-naoki-portfolio)）。設計資料（要件定義書・画面定義書・設計書・テスト結果・UML 図）は [`Doc/`](Doc/README.md) にあります。
 >
 > | 項目 | 内容 |
