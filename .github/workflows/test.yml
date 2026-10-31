@@ -13,6 +13,9 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # pubspec.lock (flutter >=3.44.0) と intl 0.20.2 固定に合わせる。
+          # 最新 stable は flutter_localizations が intl ^0.20.3 を要求し pub get が失敗する
+          flutter-version: 3.44.x
           cache: true
       - run: flutter pub get
       - run: flutter analyze
